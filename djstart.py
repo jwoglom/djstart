@@ -6,7 +6,6 @@ from subprocess import Popen
 def get_venv_exe(exe):
     return os.path.abspath(os.path.join(get_venv_exe.PATH, 'bin', exe))
 
-
 def mkdir_repo(git_path):
     if not os.path.exists(git_path):
         print("Creating directory:", git_path)
@@ -14,13 +13,13 @@ def mkdir_repo(git_path):
 
 def create_repo(git_path):
     if os.path.exists(os.path.join(git_path, ".git")):
-        print("Git repository exists, ignoring.")
+        print("Git repository exists, continuing...")
     else:
         Popen(['git', 'init', git_path]).wait()
 
 def create_venv(venv_path, python):
     if os.path.exists(venv_path):
-        print("Virtualenv exists, ignoring.")
+        print("Virtualenv exists, continuing...")
     else:
         Popen(['virtualenv', '--python={}'.format(python), venv_path]).wait()
 
@@ -36,8 +35,34 @@ def pip_install_requirements(git_path):
     Popen([get_venv_exe('pip'), 'install', '-r{}'.format(reqpath)]).wait()
 
 def django_create_project(git_path, name):
-    Popen([get_venv_exe('django-admin.py'), 'startproject', name], cwd=git_path).wait()
+    if os.path.exists(os.path.join(git_path, name, 'manage.py')):
+        print("Project exists, continuing...")
+    else:
+        Popen([get_venv_exe('django-admin.py'), 'startproject', name], cwd=git_path).wait()
 
+def django_create_default_app(django_path, name, app_name='core'):
+    managepy = os.path.join(django_path, name, 'manage.py')
+    apps = os.path.join(django_path, name, 'apps')
+    if not os.path.exists(apps):
+        os.mkdir(apps)
+    if os.path.exists(os.path.join(apps, app_name)):
+        print("App", app_name, "already exists, continuing...")
+    else:
+        Popen([managepy, 'startapp', app_name], cwd=apps).wait()
+
+def django_warp_project(django_path, name):
+    
+    """old_path = os.path.join(django_path, name)
+    move_files = ["settings.py", "urls.py", "wsgi.py", "__init__.py"]
+    for i in move_files:
+        frm = os.path.join(old_path, i)
+        to = os.path.join(django_path, i)
+        if os.path.exists(frm):
+            print("mv", frm, to)
+            shutil.move(frm, to)
+    shutil.rmdir(old_path)
+    """
+    
 
 def get_args():
     parser = argparse.ArgumentParser(description='Quick-start a Django project.')
@@ -106,8 +131,8 @@ def main():
     pip_install_requirements(git_path)
 
     django_create_project(git_path, args.name)
-
-    #django_warp_project(django_path, args.name)
+    django_create_default_app(django_path, args.name)
+    django_warp_project(django_path, args.name)
 
 
 if __name__ == '__main__':
