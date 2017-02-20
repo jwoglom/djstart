@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 import argparse
-import os, shutil
+import os
+import shutil
+import random
+import string
 from subprocess import Popen
 
 def get_venv_exe(exe):
-    return os.path.abspath(os.path.join(get_venv_exe.PATH, 'bin', exe))
+    if get_venv_exe.PATH:
+        return os.path.abspath(os.path.join(get_venv_exe.PATH, 'bin', exe))
+    return shutil.which(exe)
+
 
 
 def create_venv(venv_path, python):
@@ -51,19 +57,52 @@ def django_create_default_app(repo_path, name, app_name='core'):
     else:
         Popen([managepy, 'startapp', app_name], cwd=apps).wait()
 
-def django_warp_project(repo_path, name):
+def django_secret_settings(project_path, name):
+    settings = os.path.join(project_path, 'settings.py')
+    secret = os.path.join(project_path, 'secret.py')
+    settings_prepend = """
+try:
+    from .secret import *
+except ImportError:
     pass
+
+    """
+    with open(settings, 'r') as orig:
+        data = orig.read()
+
+    spl = data.split("INSTALLED_APPS = [")
+
+    shutil.copy(settings, settings+".bak")
+
+    if not "from .secret import" in str(data):
+        with open(settings, 'w') as mod:
+            mod.write(spl[0])
+            mod.write(settings_prepend)
+            mod.write("INSTALLED_APPS = [" + spl[1])
+
+    secret_key = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits + '!@#$%^&*(-_=+)') for _ in range(50))
+    secret_data = """
+SECRET_KEY = '{secret_key}'
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+""".format(secret_key=secret_key)
+
+    if not os.path.exists(secret):
+        with open(secret, 'w') as mod:
+            mod.write(secret_data)
+
+
+
     
 
 def get_args():
     parser = argparse.ArgumentParser(description='Quick-start a Django project.')
-    parser.add_argument('--create-repo',
+    parser.add_argument('--no-repo',
                         action='store_true',
-                        dest='create_repo',
+                        dest='no_repo',
                         help='create a git repo')
-    parser.add_argument('--create-venv',
+    parser.add_argument('--no-venv',
                         action='store_true',
-                        dest='create_venv',
+                        dest='no_venv',
                         help='create a virtualenv')
     parser.add_argument('--venv-path',
                         type=str,
@@ -94,9 +133,12 @@ def main():
     repo_path = os.path.join(outer_path, args.name)
     project_path = os.path.join(repo_path, args.name)
 
-    venv_path = args.venv_path or '~/.virtualenvs'
-    venv_path = os.path.join(os.path.expanduser(venv_path), args.name)
-    get_venv_exe.PATH = venv_path
+    if args.no_venv:
+        get_venv_exe.PATH = None
+    else:
+        venv_path = args.venv_path or '~/.virtualenvs'
+        venv_path = os.path.join(os.path.expanduser(venv_path), args.name)
+        get_venv_exe.PATH = venv_path
     DJANGO_VERSION = '1.10'
 
     python = shutil.which(args.python) or args.python
@@ -107,7 +149,7 @@ def main():
     print("venv:", venv_path)
     print("\tpython:", python)
 
-    if args.create_venv:
+    if not args.no_venv:
         create_venv(venv_path, python)
 
     pip_reqs = [
@@ -120,10 +162,11 @@ def main():
 
     pip_move_requirements(outer_path, args.name)
 
-    create_repo(repo_path)
+    if not args.no_repo:
+        create_repo(repo_path)
 
     django_create_default_app(repo_path, args.name)
-    django_warp_project(repo_path, args.name)
+    django_secret_settings(project_path, args.name)
 
 
 if __name__ == '__main__':
