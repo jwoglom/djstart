@@ -6,16 +6,16 @@ from subprocess import Popen
 def get_venv_exe(exe):
     return os.path.abspath(os.path.join(get_venv_exe.PATH, 'bin', exe))
 
-def mkdir_repo(git_path):
-    if not os.path.exists(git_path):
-        print("Creating directory:", git_path)
-        os.mkdir(git_path)
+def mkdir_repo(repo_path):
+    if not os.path.exists(repo_path):
+        print("Creating directory:", repo_path)
+        os.mkdir(repo_path)
 
-def create_repo(git_path):
-    if os.path.exists(os.path.join(git_path, ".git")):
+def create_repo(repo_path):
+    if os.path.exists(os.path.join(repo_path, ".git")):
         print("Git repository exists, continuing...")
     else:
-        Popen(['git', 'init', git_path]).wait()
+        Popen(['git', 'init', repo_path]).wait()
 
 def create_venv(venv_path, python):
     if os.path.exists(venv_path):
@@ -23,26 +23,30 @@ def create_venv(venv_path, python):
     else:
         Popen(['virtualenv', '--python={}'.format(python), venv_path]).wait()
 
-def pip_generate_requirements(git_path, pip_reqs=[]):
-    reqpath = os.path.join(git_path, 'requirements.txt')
+def pip_generate_requirements(repo_path, pip_reqs=[]):
+    reqpath = os.path.join(repo_path, 'requirements.txt')
     with open(reqpath, 'w') as fo:
         fo.write('\n'.join(pip_reqs))
         fo.write('\n')
     fo.close()
 
-def pip_install_requirements(git_path):
-    reqpath = os.path.join(git_path, 'requirements.txt')
+def pip_install_requirements(repo_path):
+    reqpath = os.path.join(repo_path, 'requirements.txt')
     Popen([get_venv_exe('pip'), 'install', '-r{}'.format(reqpath)]).wait()
 
-def django_create_project(git_path, name):
-    if os.path.exists(os.path.join(git_path, name, 'manage.py')):
+def django_create_project(repo_path, name):
+    if os.path.exists(os.path.join(repo_path, 'manage.py')):
         print("Project exists, continuing...")
     else:
-        Popen([get_venv_exe('django-admin.py'), 'startproject', name], cwd=git_path).wait()
+        Popen([get_venv_exe('django-admin.py'), 'startproject', name], cwd=repo_path).wait()
+
+def django_move_project(repo_path, name):
+    old_path = os.path.join(repo_path, name)
+    shutil.move(old_path, repo_path)
 
 def django_create_default_app(django_path, name, app_name='core'):
-    managepy = os.path.join(django_path, name, 'manage.py')
-    apps = os.path.join(django_path, name, 'apps')
+    managepy = os.path.join(django_path, 'manage.py')
+    apps = os.path.join(django_path, 'apps')
     if not os.path.exists(apps):
         os.mkdir(apps)
     if os.path.exists(os.path.join(apps, app_name)):
@@ -100,8 +104,8 @@ def main():
     outer_path = args.path or '.'
     outer_path = os.path.abspath(outer_path)
 
-    git_path = os.path.join(outer_path, args.name)
-    django_path = os.path.join(git_path, args.name)
+    repo_path = os.path.join(outer_path, args.name)
+    django_path = os.path.join(repo_path, args.name)
 
     venv_path = args.venv_path or '~/.virtualenvs'
     venv_path = os.path.join(os.path.expanduser(venv_path), args.name)
@@ -111,15 +115,15 @@ def main():
     python = shutil.which(args.python) or args.python
 
     print("outer_path:", outer_path)
-    print("\tgit:", git_path)
+    print("\tgit:", repo_path)
     print("\tdjango:", django_path)
     print("venv:", venv_path)
     print("\tpython:", python)
 
-    mkdir_repo(git_path)
+    mkdir_repo(repo_path)
 
     if args.create_repo:
-        create_repo(git_path)
+        create_repo(repo_path)
 
     if args.create_venv:
         create_venv(venv_path, python)
@@ -127,10 +131,13 @@ def main():
     pip_reqs = [
         'Django~={}'.format(DJANGO_VERSION),
     ]
-    pip_generate_requirements(git_path, pip_reqs)
-    pip_install_requirements(git_path)
+    pip_generate_requirements(repo_path, pip_reqs)
+    pip_install_requirements(repo_path)
 
-    django_create_project(git_path, args.name)
+    django_create_project(repo_path, args.name)
+    django_move_project(repo_path, args.name)
+
+    return
     django_create_default_app(django_path, args.name)
     django_warp_project(django_path, args.name)
 
